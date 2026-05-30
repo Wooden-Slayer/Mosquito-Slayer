@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mosquito Slayer Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <style>
+        body { 
+            user-select: none; 
+            -webkit-tap-highlight-color: transparent; 
+            touch-action: manipulation;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow-x: hidden;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .glass-dark { 
+            background: rgba(255, 255, 255, 0.05); 
+            backdrop-filter: blur(20px); 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+        }
+    </style>
+</head>
+<body class="bg-blue-50 text-slate-800 min-h-screen">
+
+    <div id="app" class="max-w-md mx-auto relative min-h-screen flex flex-col justify-between">
+
+        <!-- SCREEN: AUTH -->
+        <div id="screen-auth" class="screen hidden min-h-screen flex items-center justify-center p-6 bg-[#0f172a] text-white w-full">
+            <div class="w-full glass-dark rounded-[2.5rem] p-8 shadow-2xl border border-white/10">
+                <div class="text-center mb-6">
+                    <h1 class="text-3xl font-black italic tracking-tighter">MS <span class="text-blue-500">PRO</span></h1>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-1">Player Login</p>
+                </div>
+
+                <div id="auth-error" class="hidden bg-red-500/20 text-red-400 p-3 rounded-2xl text-[11px] font-bold mb-5 text-center border border-red-500/30"></div>
+
+                <div class="flex bg-white/10 rounded-2xl p-1 mb-6">
+                    <button onclick="toggleAuthTab('login')" id="btn-auth-login" class="w-1/2 py-2 rounded-xl font-bold bg-white/20 text-white">Login</button>
+                    <button onclick="toggleAuthTab('reg')" id="btn-auth-reg" class="w-1/2 py-2 rounded-xl font-bold text-slate-400">Signup</button>
+                </div>
+
+                <form id="auth-form" onsubmit="handleAuthSubmit(event)" class="space-y-4">
+                    <input type="text" id="auth-username" placeholder="Username" required
+                        class="w-full p-4 bg-white/10 rounded-2xl border border-white/10 outline-none focus:ring-2 ring-blue-500 text-white placeholder-slate-500 text-sm bg-transparent">
+                    <input type="password" id="auth-password" placeholder="Password" required
+                        class="w-full p-4 bg-white/10 rounded-2xl border border-white/10 outline-none focus:ring-2 ring-blue-500 text-white placeholder-slate-500 text-sm bg-transparent">
+                    <button type="submit" id="auth-submit-btn"
+                        class="w-full py-4 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-2xl font-black transition-all shadow-lg shadow-blue-500/20 uppercase text-xs tracking-widest mt-2">
+                        Enter Game
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- SCREEN: GAME LEVELS -->
+        <div id="screen-levels" class="screen hidden p-6 pb-32">
+            <div id="toast-earnings" class="hidden fixed top-10 left-1/2 -translate-x-1/2 z-[100] bg-green-500 text-white px-6 py-3 rounded-full font-black shadow-2xl flex items-center space-x-2 border-2 border-white animate-bounce">
+                <i class="fas fa-check-circle"></i>
+                <span>+ ₹0.50 EARNED!</span>
+            </div>
+
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h2 class="text-3xl font-black italic">LEVELS</h2>
+                    <p class="text-[10px] font-bold opacity-50 uppercase tracking-widest">₹0.50 Per Slay</p>
+                </div>
+                <div id="levels-display-lvl" class="glass px-5 py-2 rounded-2xl font-black text-blue-600 border border-blue-100 shadow-sm">
+                    Lvl 1
+                </div>
+            </div>
+
+            <div id="levels-grid" class="grid grid-cols-4 gap-4"></div>
+        </div>
+
+        <!-- SCREEN: GAMEPLAY -->
+        <div id="screen-play" class="screen hidden fixed inset-0 bg-white z-50 overflow-hidden">
+            <div class="absolute top-0 w-full p-6 flex justify-between items-center z-10">
+                <div class="glass px-6 py-2 rounded-2xl bg-white/80 border border-gray-100 shadow-sm">
+                    <span class="text-[10px] uppercase font-black opacity-40 block">Goal</span>
+                    <span class="text-xl font-black" id="play-score-display">0</span> / <span id="play-target-display">15</span>
+                </div>
+                <div class="glass px-6 py-2 rounded-2xl bg-white/80 border border-gray-100 shadow-sm text-right">
+                    <span class="text-[10px] uppercase font-black opacity-40 block">Timer</span>
+                    <span class="text-xl font-black text-red-500" id="play-timer-display">30s</span>
+                </div>
+            </div>
+
+            <div id="play-spawn-zone" class="w-full h-full relative bg-blue-50/20"></div>
+
+            <div id="play-overlay" class="hidden absolute inset-0 glass flex flex-col items-center justify-center p-10 z-50 text-center bg-white/95">
+                <h2 id="play-overlay-msg" class="text-4xl font-black mb-6 italic uppercase tracking-tighter">LEVEL FAILED</h2>
+                <button id="play-claim-btn" onclick="claimGameReward()" class="hidden px-12 py-5 bg-green-500 text-white rounded-[2rem] font-black text-xl shadow-2xl border-4 border-green-200 active:scale-95 transition-all">
+                    CLAIM ₹0.50
+                </button>
+                <button id="play-retry-btn" onclick="showScreen('screen-levels')" class="hidden px-12 py-5 bg-red-500 text-white rounded-[2rem] font-black text-xl shadow-2xl active:scale-95 transition-all">
+                    TRY AGAIN
+                </button>
+            </div>
+        </div>
+
+        <!-- SCREEN: WALLET -->
+        <div id="screen-wallet" class="screen hidden p-8 pb-32">
+            <h2 class="text-3xl font-black mb-2 italic">My Earnings</h2>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8">Level Rewards: ₹0.50 / Level</p>
+            
+            <div class="glass p-8 rounded-[2.5rem] text-center mb-8 bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-none shadow-2xl relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-4 opacity-10 text-6xl rotate-12">
+                    <i class="fas fa-wallet"></i>
+                </div>
+                <span class="text-xs font-bold opacity-70 uppercase tracking-tighter">Available Balance</span>
+                <h1 class="text-6xl font-black mt-2" id="wallet-balance">₹0.00</h1>
+            </div>
+
+            <div class="glass p-6 rounded-3xl mb-8 bg-white/50">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-bold text-sm">Payout Progress</h3>
+                    <span class="text-[10px] font-black text-blue-600">MIN. ₹250</span>
+                </div>
+                <div class="w-full bg-gray-200 h-4 rounded-full overflow-hidden p-1">
+                    <div id="wallet-progress-bar" class="bg-blue-600 h-full rounded-full transition-all duration-1000" style="width: 0%"></div>
+                </div>
+                <p id="wallet-footer-text" class="text-[10px] mt-2 text-slate-500 font-bold uppercase">Keep slaying!</p>
+            </div>
+
+            <div id="wallet-withdrawal-container"></div>
+        </div>
+
+        <!-- SCREEN: PROFILE -->
+        <div id="screen-profile" class="screen hidden p-8 pb-32">
+            <div class="flex items-center space-x-4 mb-10">
+                <div class="h-20 w-20 bg-blue-100 rounded-full flex items-center justify-center text-3xl text-blue-600">
+                    <i class="fas fa-user-ninja"></i>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-black" id="profile-username">@Player</h2>
+                    <p class="text-blue-600 font-bold">Elite Slayer</p>
+                </div>
+            </div>
+
+            <form onsubmit="saveProfile(event)" class="space-y-6">
+                <div class="glass p-6 rounded-3xl">
+                    <label class="block text-xs font-bold uppercase opacity-50 mb-2">Your UPI ID</label>
+                    <input type="text" id="profile-upi-input" placeholder="username@upi" class="w-full bg-transparent border-none outline-none text-xl font-bold text-slate-800">
+                </div>
+                <button type="submit" class="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold">Save Profile</button>
+                <button type="button" onclick="logout()" class="w-full block text-center text-red-500 font-bold">Logout</button>
+            </form>
+        </div>
+
+        <!-- Navigation Bar -->
+        <div id="user-nav" class="fixed bottom-6 left-1/2 -translate-x-1/2 w-11/12 max-w-md h-16 glass rounded-3xl flex items-center justify-around px-6 shadow-2xl z-40 hidden">
+            <button onclick="showScreen('screen-levels')" id="nav-user-play" class="flex flex-col items-center text-slate-400">
+                <i class="fas fa-gamepad text-xl"></i>
+                <span class="text-[10px] font-bold">Play</span>
+            </button>
+            <button onclick="showScreen('screen-wallet')" id="nav-user-wallet" class="flex flex-col items-center text-slate-400">
+                <i class="fas fa-wallet text-xl"></i>
+                <span class="text-[10px] font-bold">Wallet</span>
+            </button>
+            <button onclick="showScreen('screen-profile')" id="nav-user-profile" class="flex flex-col items-center text-slate-400">
+                <i class="fas fa-user-circle text-xl"></i>
+                <span class="text-[10px] font-bold">Profile</span>
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            databaseURL: "https://mosquito-slayer-default-rtdb.firebaseio.com/"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let currentUser = null;
+        let authTab = 'login';
+        let playScore = 0;
+        let playTarget = 15;
+        let playTimeLeft = 30;
+        let playActiveLevel = 1;
+        let playIntervals = [];
+        let isGameRunning = false;
+
+        async function initMockDatabase() {
+            try {
+                const adminSnap = await db.ref('users/admin').once('value');
+                if (!adminSnap.exists()) {
+                    await db.ref('users/admin').set({
+                        id: 1, username: 'admin', password: 'admin123', upi_id: '', current_level: 1, balance: 0.00, is_admin: true, status: 'active'
+                    });
+                }
+            } catch (err) {
+                console.error("Database initialization failed:", err);
+            }
+        }
+
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(el => el.classList.add('hidden'));
+            const activeScreen = document.getElementById(screenId);
+            if (activeScreen) activeScreen.classList.remove('hidden');
+
+            const userNav = document.getElementById('user-nav');
+            userNav.classList.add('hidden');
+
+            if (['screen-levels', 'screen-wallet', 'screen-profile'].includes(screenId)) {
+                userNav.classList.remove('hidden');
+                updateNavHighlight(screenId);
+            }
+
+            if (screenId === 'screen-levels') renderLevels();
+            if (screenId === 'screen-wallet') renderWallet();
+            if (screenId === 'screen-profile') renderProfile();
+        }
+
+        function updateNavHighlight(screenId) {
+            document.getElementById('nav-user-play').className = screenId === 'screen-levels' ? 'flex flex-col items-center text-blue-600' : 'flex flex-col items-center text-slate-400';
+            document.getElementById('nav-user-wallet').className = screenId === 'screen-wallet' ? 'flex flex-col items-center text-blue-600' : 'flex flex-col items-center text-slate-400';
+            document.getElementById('nav-user-profile').className = screenId === 'screen-profile' ? 'flex flex-col items-center text-blue-600' : 'flex flex-col items-center text-slate-400';
+        }
+
+        function toggleAuthTab(tab) {
+            authTab = tab;
+            const loginBtn = document.getElementById('btn-auth-login');
+            const regBtn = document.getElementById('btn-auth-reg');
+            const submitBtn = document.getElementById('auth-submit-btn');
+            
+            if (tab === 'reg') {
+                regBtn.className = "w-1/2 py-2 rounded-xl font-bold bg-white/20 text-white";
+                loginBtn.className = "w-1/2 py-2 rounded-xl font-bold text-slate-400";
+                submitBtn.innerText = "Create Account";
+            } else {
+                loginBtn.className = "w-1/2 py-2 rounded-xl font-bold bg-white/20 text-white";
+                regBtn.className = "w-1/2 py-2 rounded-xl font-bold text-slate-400";
+                submitBtn.innerText = "Enter Game";
+            }
+        }
+
+        async function handleAuthSubmit(event) {
+            event.preventDefault();
+            const u = document.getElementById('auth-username').value.trim();
+            const p = document.getElementById('auth-password').value;
+            const errDiv = document.getElementById('auth-error');
+            errDiv.classList.add('hidden');
+
+            try {
+                if (authTab === 'reg') {
+                    const existSnap = await db.ref('users/' + u.toLowerCase()).once('value');
+                    if (existSnap.exists()) {
+                        errDiv.innerText = "Username is already taken!";
+                        errDiv.classList.remove('hidden');
+                        return;
+                    }
+                    const newUser = {
+                        id: Date.now(), username: u, password: p, upi_id: '', current_level: 1, balance: 0.00, is_admin: false, status: 'active'
+                    };
+                    await db.ref('users/' + u.toLowerCase()).set(newUser);
+                    currentUser = newUser;
+                    localStorage.setItem('sl_username', u.toLowerCase());
+                    showScreen('screen-levels');
+                } else {
+                    const userSnap = await db.ref('users/' + u.toLowerCase()).once('value');
+                    if (userSnap.exists()) {
+                        const user = userSnap.val();
+                        if (user.password === p) {
+                            if (user.status === 'blocked') {
+                                errDiv.innerText = "Access Denied: Your account is blocked.";
+                                errDiv.classList.remove('hidden');
+                                return;
+                            }
+                            currentUser = user;
+                            localStorage.setItem('sl_username', u.toLowerCase());
+                            showScreen('screen-levels');
+                        } else {
+                            errDiv.innerText = "Incorrect Password";
+                            errDiv.classList.remove('hidden');
+                        }
+                    } else {
+                        errDiv.innerText = "Username not found";
+                        errDiv.classList.remove('hidden');
+                    }
+                }
+            } catch (error) {
+                errDiv.innerText = "Database Connection Error: " + error.message;
+                errDiv.classList.remove('hidden');
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('sl_username');
+            showScreen('screen-auth');
+        }
+
+        function renderLevels() {
+            const grid = document.getElementById('levels-grid');
+            grid.innerHTML = "";
+            document.getElementById('levels-display-lvl').innerText = `Lvl ${currentUser.current_level}`;
+
+            for (let i = 1; i <= 120; i++) {
+                const isLocked = i > currentUser.current_level;
+                const isCurrent = i === currentUser.current_level;
+                const node = document.createElement('button');
+                node.onclick = () => { if (!isLocked) launchLevel(i); };
+                
+                let btnClass = "h-16 w-16 rounded-2xl flex items-center justify-center font-black text-lg transition-all active:scale-90 ";
+                if (isLocked) {
+                    btnClass += "bg-gray-200 text-gray-400 opacity-50 cursor-not-allowed";
+                    node.innerHTML = '<i class="fas fa-lock text-[10px]"></i>';
+                } else if (isCurrent) {
+                    btnClass += "bg-blue-600 text-white shadow-lg ring-4 ring-blue-100";
+                    node.innerText = i;
+                } else {
+                    btnClass += "glass text-blue-600 shadow-md bg-white/80";
+                    node.innerText = i;
+                }
+                node.className = btnClass;
+                grid.appendChild(node);
+            }
+        }
+
+        function launchLevel(levelNum) {
+            playActiveLevel = levelNum;
+            playScore = 0;
+            playTarget = levelNum <= 100 ? (15 + levelNum) : (115 + Math.floor((levelNum - 100) * 0.5));
+            playTimeLeft = levelNum <= 100 ? 30 : 60;
+
+            document.getElementById('play-score-display').innerText = playScore;
+            document.getElementById('play-target-display').innerText = playTarget;
+            document.getElementById('play-timer-display').innerText = playTimeLeft + "s";
+            document.getElementById('play-overlay').classList.add('hidden');
+            
+            const spawnZone = document.getElementById('play-spawn-zone');
+            spawnZone.innerHTML = "";
+            isGameRunning = true;
+
+            showScreen('screen-play');
+
+            const spawnSpeed = levelNum > 100 ? 250 : 500;
+            const spawner = setInterval(() => { if (isGameRunning) createMosquitoElement(); }, spawnSpeed);
+            const timer = setInterval(() => {
+                playTimeLeft--;
+                document.getElementById('play-timer-display').innerText = playTimeLeft + "s";
+                if (playTimeLeft <= 0) endGamePlay();
+            }, 1000);
+
+            playIntervals.push(spawner, timer);
+        }
+
+        function createMosquitoElement() {
+            const spawnZone = document.getElementById('play-spawn-zone');
+            const m = document.createElement('div');
+            m.innerHTML = '<i class="fas fa-bug"></i>';
+            m.className = 'absolute text-4xl text-slate-800 transition-all duration-300 pointer-events-auto flex items-center justify-center h-12 w-12 cursor-pointer';
+            m.style.left = (Math.random() * (window.innerWidth - 60)) + 'px';
+            m.style.top = (Math.random() * (window.innerHeight - 120) + 60) + 'px';
+
+            m.onclick = () => {
+                if (!isGameRunning) return;
+                playScore++;
+                document.getElementById('play-score-display').innerText = playScore;
+                m.innerHTML = '<i class="fas fa-certificate text-red-500 scale-150"></i>';
+                setTimeout(() => m.remove(), 150);
+            };
+            spawnZone.appendChild(m);
+            setTimeout(() => { if (m.parentNode) m.remove(); }, 2500);
+        }
+
+        function endGamePlay() {
+            isGameRunning = false;
+            playIntervals.forEach(clearInterval);
+            playIntervals = [];
+
+            document.getElementById('play-overlay').classList.remove('hidden');
+            const overlayMsg = document.getElementById('play-overlay-msg');
+            const claimBtn = document.getElementById('play-claim-btn');
+            const retryBtn = document.getElementById('play-retry-btn');
+
+            claimBtn.classList.add('hidden');
+            retryBtn.classList.add('hidden');
+
+            if (playScore >= playTarget) {
+                overlayMsg.innerText = "VICTORY!";
+                claimBtn.classList.remove('hidden');
+            } else {
+                overlayMsg.innerText = "LEVEL FAILED";
+                retryBtn.classList.remove('hidden');
+            }
+        }
+
+        async function claimGameReward() {
+            if (playActiveLevel === currentUser.current_level) {
+                currentUser.current_level += 1;
+                currentUser.balance += 0.50;
+                
+                try {
+                    await db.ref('users/' + currentUser.username.toLowerCase()).set(currentUser);
+                } catch (err) {
+                    alert("Database Save Error: " + err.message);
+                }
+
+                const toast = document.getElementById('toast-earnings');
+                toast.classList.remove('hidden');
+                setTimeout(() => { toast.classList.add('hidden'); }, 2500);
+            }
+            showScreen('screen-levels');
+        }
+
+        function renderWallet() {
+            document.getElementById('wallet-balance').innerText = `₹${currentUser.balance.toFixed(2)}`;
+            let progress = Math.min((currentUser.balance / 250) * 100, 100);
+            document.getElementById('wallet-progress-bar').style.width = progress + '%';
+            document.getElementById('wallet-footer-text').innerText = `Keep slaying! You are Lvl ${currentUser.current_level}`;
+
+            const container = document.getElementById('wallet-withdrawal-container');
+            container.innerHTML = "";
+
+            if (currentUser.balance >= 250) {
+                const btn = document.createElement('button');
+                btn.className = "w-full py-5 bg-green-500 hover:bg-green-600 text-white rounded-2xl font-black text-xl shadow-xl transition-all active:scale-95";
+                btn.innerText = "WITHDRAW TO UPI";
+                btn.onclick = requestWithdrawal;
+                container.appendChild(btn);
+            } else {
+                const lockDiv = document.createElement('div');
+                lockDiv.className = "w-full py-5 bg-slate-200 text-slate-400 rounded-2xl font-black text-center text-sm border border-slate-300";
+                lockDiv.innerHTML = '<i class="fas fa-lock mr-2"></i> WITHDRAWAL LOCKED';
+                container.appendChild(lockDiv);
+            }
+        }
+
+        async function requestWithdrawal() {
+            if (currentUser.balance < 250) return;
+            
+            try {
+                const claimRef = db.ref('claims').push();
+                const newClaim = {
+                    id: claimRef.key, 
+                    user_id: currentUser.id, 
+                    username: currentUser.username, 
+                    upi_id: currentUser.upi_id || "NOT SET", 
+                    amount: 250.00, 
+                    status: 'pending', 
+                    created_at: new Date().toLocaleString()
+                };
+                await claimRef.set(newClaim);
+                
+                currentUser.balance -= 250;
+                await db.ref('users/' + currentUser.username.toLowerCase()).set(currentUser);
+                
+                renderWallet();
+                alert("Withdrawal successfully requested!");
+            } catch (err) {
+                alert("Withdrawal Submission Failed: " + err.message);
+            }
+        }
+
+        function renderProfile() {
+            document.getElementById('profile-username').innerText = `@${currentUser.username}`;
+            document.getElementById('profile-upi-input').value = currentUser.upi_id || "";
+        }
+
+        async function saveProfile(event) {
+            event.preventDefault();
+            currentUser.upi_id = document.getElementById('profile-upi-input').value.trim();
+            try {
+                await db.ref('users/' + currentUser.username.toLowerCase()).set(currentUser);
+                alert("Profile successfully updated!");
+            } catch (err) {
+                alert("Save Failed: " + err.message);
+            }
+        }
+
+        window.onload = async () => {
+            await initMockDatabase();
+            
+            const savedUser = localStorage.getItem('sl_username');
+            if (savedUser) {
+                try {
+                    const checkSnap = await db.ref('users/' + savedUser).once('value');
+                    if (checkSnap.exists() && checkSnap.val().status !== 'blocked') {
+                        currentUser = checkSnap.val();
+                        showScreen('screen-levels');
+                        return;
+                    }
+                } catch (e) {
+                    console.error("Auto Login Check Failed", e);
+                }
+            }
+            showScreen('screen-auth');
+        };
+    </script>
+</body>
+</html>
